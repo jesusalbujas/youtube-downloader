@@ -1,12 +1,37 @@
 import flet as ft
 import os
 import base64
-import asyncio
+import json
 from ui.icon_data import ICON_B64
 from ui.components.search_bar import SearchBar
 from ui.components.video_list import VideoList
 from ui.components.download_controls import DownloadControls
 from downloader.yt_handler import fetch_playlist_sync, download_videos_sync
+
+# Archivo donde se persiste la lista entre sesiones
+SESSION_FILE = os.path.join(os.path.expanduser("~"), ".yt_downloader_session.json")
+
+
+def save_session(video_list: VideoList):
+    """Guarda todos los videos en disco."""
+    try:
+        data = [{"id": item.vid_id, "title": item.title} for item in video_list.items]
+        with open(SESSION_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+
+def load_session() -> list:
+    """Carga los videos guardados en la sesión anterior."""
+    try:
+        if os.path.exists(SESSION_FILE):
+            with open(SESSION_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            return [(item["id"], item["title"]) for item in data]
+    except Exception:
+        pass
+    return []
 
 
 def main_app(page: ft.Page):
@@ -23,9 +48,15 @@ def main_app(page: ft.Page):
     page.window.icon = icon_path
 
     # ── Instanciar componentes ──────────────────────────────────────────────
-    search_bar  = SearchBar(on_search=lambda url: None)   # reemplazado abajo
+    search_bar  = SearchBar(on_search=lambda url: None)
     video_list  = VideoList()
     dl_controls = DownloadControls(on_download=lambda d, f: None)
+
+    # ── Restaurar sesión anterior ───────────────────────────────────────────
+    saved = load_session()
+    if saved:
+        video_list.add_videos(saved)
+        dl_controls.append_log(f"♻️ Se restauraron {len(saved)} videos de la sesión anterior.")
 
     # ── Búsqueda ────────────────────────────────────────────────────────────
     def on_search(url):
@@ -46,6 +77,7 @@ def main_app(page: ft.Page):
                 dl_controls.append_log(f"Error buscando: {err}")
             else:
                 video_list.add_videos(videos)
+                save_session(video_list)          # ← guardar tras cada búsqueda
                 search_bar.set_loading(False)
             page.update()
 
@@ -84,10 +116,18 @@ def main_app(page: ft.Page):
     dl_controls.on_download = on_download
 
     # ── Botones de utilidad ─────────────────────────────────────────────────
-    select_all_btn     = ft.TextButton("Marcar Todos",       icon=ft.icons.Icons.CHECK_BOX,              on_click=video_list.select_all)
-    deselect_all_btn   = ft.TextButton("Desmarcar Todos",    icon=ft.icons.Icons.CHECK_BOX_OUTLINE_BLANK, on_click=video_list.deselect_all)
-    clear_all_btn      = ft.TextButton("Limpiar Lista",      icon=ft.icons.Icons.DELETE_SWEEP,            icon_color="red",    on_click=video_list.clear_all)
-    remove_selected_btn= ft.TextButton("Quitar Seleccionados", icon=ft.icons.Icons.DELETE_OUTLINE,        icon_color="orange", on_click=video_list.remove_selected)
+    def _clear_all_and_save(e):
+        video_list.clear_all(e)
+        save_session(video_list)
+
+    def _remove_selected_and_save(e):
+        video_list.remove_selected(e)
+        save_session(video_list)
+
+    select_all_btn      = ft.TextButton("Marcar Todos",         icon=ft.icons.Icons.CHECK_BOX,              on_click=video_list.select_all)
+    deselect_all_btn    = ft.TextButton("Desmarcar Todos",      icon=ft.icons.Icons.CHECK_BOX_OUTLINE_BLANK, on_click=video_list.deselect_all)
+    clear_all_btn       = ft.TextButton("Limpiar Lista",        icon=ft.icons.Icons.DELETE_SWEEP,            icon_color="red",    on_click=_clear_all_and_save)
+    remove_selected_btn = ft.TextButton("Quitar Seleccionados", icon=ft.icons.Icons.DELETE_OUTLINE,          icon_color="orange", on_click=_remove_selected_and_save)
 
     def on_range_change(e):
         video_list.range_mode = e.control.value
