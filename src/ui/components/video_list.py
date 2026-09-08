@@ -16,7 +16,8 @@ class VideoItem(ft.Row):
             icon=ft.icons.Icons.CLOSE,
             icon_color="red",
             tooltip="Quitar de la lista",
-            on_click=lambda e: on_delete(self)
+            on_click=lambda e: on_delete(self),
+            mouse_cursor=ft.MouseCursor.CLICK,
         )
         
         self.controls = [self.checkbox, self.delete_btn]
@@ -77,6 +78,16 @@ class VideoList(ft.Column):
             self.controls.remove(item)
             self.last_toggled_index = None
             self.update()
+
+    def remove_by_video_id(self, vid_id):
+        """Remove an item only after its file was actually created."""
+        item = next((item for item in self.items if item.vid_id == vid_id), None)
+        if not item:
+            return False
+        self.items.remove(item)
+        self.controls.remove(item)
+        self.last_toggled_index = None
+        return True
             
     def select_all(self, e=None):
         for item in self.items:
