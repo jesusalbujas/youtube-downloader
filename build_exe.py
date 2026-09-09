@@ -51,7 +51,7 @@ def main():
 
     print("Running:", " ".join(cmd))
     subprocess.check_call(cmd)
-    print(f"\n✅ Build completado: dist/{exe_name}")
+    print(f"\nBuild completado: dist/{exe_name}")
 
 
 if __name__ == "__main__":
